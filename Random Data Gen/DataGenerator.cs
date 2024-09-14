@@ -15,6 +15,11 @@ public class DataGenerator
             return GenerateRandomList(property, trackedClasses);
         }
 
+        if (IsEnum(property.Type, trackedClasses))
+        {
+            return GenerateRandomEnum(property, trackedClasses);
+        }
+
         if (property.Type.ToLower() == "enum" && property.Values != null && property.Values.Any())
         {
             return property.Values[random.Next(property.Values.Count)];
@@ -44,6 +49,27 @@ public class DataGenerator
         }
     }
 
+    private static bool IsEnum(string typeName, List<ClassDefinition> trackedClasses)
+    {
+        var customType = trackedClasses.FirstOrDefault(c => c.Name == typeName);
+        return customType != null && customType.Properties.Any(p => p.Type.ToLower() == "enum");
+    }
+
+    private static object GenerateRandomEnum(PropertyDefinition property, List<ClassDefinition> trackedClasses)
+    {
+        var customType = trackedClasses.FirstOrDefault(c => c.Name == property.Type);
+        if (customType != null && customType.Properties.Any())
+        {
+            var enumProperty = customType.Properties.First();
+            if (enumProperty.Values != null && enumProperty.Values.Any())
+            {
+                return enumProperty.Values[random.Next(enumProperty.Values.Count)];
+            }
+        }
+        return null;
+    }
+
+
     public static void GenerateData(ClassDefinition classDef, List<ClassDefinition> trackedClasses, int count = 1)
     {
         for (int i = 0; i < count; i++)
@@ -55,7 +81,7 @@ public class DataGenerator
             Console.WriteLine(GenerateJsonOutput(generatedObject));
 
             Console.WriteLine("\nC# Object Initialization Format:");
-            Console.WriteLine(GenerateCSharpOutput(classDef.Name, generatedObject));
+            Console.WriteLine(GenerateCSharpOutput(classDef.Name, generatedObject,trackedClasses));
         }
     }
     private static string GenerateJsonOutput(object obj)
@@ -63,7 +89,7 @@ public class DataGenerator
         return JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    private static string GenerateCSharpOutput(string className, object obj, string indent = "")
+    private static string GenerateCSharpOutput(string className, object obj, List<ClassDefinition> trackedClasses, string indent = "")
     {
         var sb = new StringBuilder();
         sb.AppendLine($"{indent}{className} {className.ToLower()}1 = new {className}()");
@@ -73,42 +99,50 @@ public class DataGenerator
         {
             foreach (var kvp in dict)
             {
-                if (kvp.Value is Dictionary<string, object> nestedDict)
+                var propertyType = GetPropertyType(className, kvp.Key, trackedClasses);
+
+                if (IsEnum(propertyType, trackedClasses))
                 {
-                    sb.AppendLine($"{indent}    {kvp.Key} = new {kvp.Key}()");
+                    sb.AppendLine($"{indent}    {kvp.Key} = {propertyType}.{kvp.Value},");
+                }
+                else if (kvp.Value is Dictionary<string, object> nestedDict)
+                {
+                    sb.AppendLine($"{indent}    {kvp.Key} = new {propertyType}()");
                     sb.AppendLine($"{indent}    {{");
                     foreach (var nestedKvp in nestedDict)
                     {
-                        sb.AppendLine($"{indent}        {nestedKvp.Key} = {FormatValue(nestedKvp.Value)},");
+                        sb.AppendLine($"{indent}        {nestedKvp.Key} = {FormatValue(nestedKvp.Value, GetPropertyType(propertyType, nestedKvp.Key, trackedClasses), trackedClasses)},");
                     }
                     sb.AppendLine($"{indent}    }},");
                 }
                 else if (kvp.Value is List<object> list)
                 {
-                    sb.AppendLine($"{indent}    {kvp.Key} = new List<object>()");
+                    var innerType = ExtractInnerType(propertyType);
+
+                    sb.AppendLine($"{indent}    {kvp.Key} = new List<{innerType}>()");
                     sb.AppendLine($"{indent}    {{");
                     foreach (var item in list)
                     {
                         if (item is Dictionary<string, object> listItemDict)
                         {
-                            sb.AppendLine($"{indent}        new()");
+                            sb.AppendLine($"{indent}        new {innerType}()");
                             sb.AppendLine($"{indent}        {{");
                             foreach (var listItemKvp in listItemDict)
                             {
-                                sb.AppendLine($"{indent}            {listItemKvp.Key} = {FormatValue(listItemKvp.Value)},");
+                                sb.AppendLine($"{indent}            {listItemKvp.Key} = {FormatValue(listItemKvp.Value, GetPropertyType(innerType, listItemKvp.Key, trackedClasses), trackedClasses)},");
                             }
                             sb.AppendLine($"{indent}        }},");
                         }
                         else
                         {
-                            sb.AppendLine($"{indent}        {FormatValue(item)},");
+                            sb.AppendLine($"{indent}        {FormatValue(item, innerType, trackedClasses)},");
                         }
                     }
                     sb.AppendLine($"{indent}    }},");
                 }
                 else
                 {
-                    sb.AppendLine($"{indent}    {kvp.Key} = {FormatValue(kvp.Value)},");
+                    sb.AppendLine($"{indent}    {kvp.Key} = {FormatValue(kvp.Value, propertyType, trackedClasses)},");
                 }
             }
         }
@@ -116,10 +150,51 @@ public class DataGenerator
         sb.AppendLine($"{indent}}};");
         return sb.ToString();
     }
-
-    private static string FormatValue(object value)
+    private static string GetPropertyType(string className, string propertyName, List<ClassDefinition> trackedClasses)
     {
-        if (value is string)
+        var classDefinition = trackedClasses.FirstOrDefault(c => c.Name == className);
+        if (classDefinition != null)
+        {
+            var property = classDefinition.Properties.FirstOrDefault(p => p.Name == propertyName);
+            if (property != null)
+            {
+                return property.Type;
+            }
+        }
+        return "object"; // Default to object if type is not found
+    }
+
+    private static string GetCustomTypeName(string typeName, List<ClassDefinition> trackedClasses)
+    {
+        // Handle generic types
+        if (typeName.StartsWith("List<") || typeName.StartsWith("IEnumerable<"))
+        {
+            var innerType = ExtractInnerType(typeName);
+            var customType = trackedClasses.FirstOrDefault(c => c.Name == innerType);
+            return customType != null ? customType.Name : "object";
+        }
+
+        // Handle non-generic types
+        var type = trackedClasses.FirstOrDefault(c => c.Name == typeName);
+        return type != null ? type.Name : "object";
+    }
+
+
+    private static string ExtractInnerType(string type)
+    {
+        if (type.StartsWith("List<") || type.StartsWith("IEnumerable<"))
+        {
+            return type.Substring(type.IndexOf('<') + 1, type.LastIndexOf('>') - type.IndexOf('<') - 1);
+        }
+        return type;
+    }
+
+
+    private static string FormatValue(object value, string type, List<ClassDefinition> trackedClasses)
+    {
+        if (IsEnum(type, trackedClasses))
+            return $"{type}.{value}";
+        else if (value is string)
             return $"\"{value}\"";
         else if (value is DateTime dateTime)
             return $"DateTime.Parse(\"{dateTime:yyyy-MM-dd HH:mm:ss}\")";
@@ -164,12 +239,6 @@ public class DataGenerator
         }
     }
 
-    private static string GenerateRandomString()
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        return new string(Enumerable.Repeat(chars, 10)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
-    }
 
     private static object GenerateRandomList(PropertyDefinition property, List<ClassDefinition> trackedClasses)
     {
@@ -183,14 +252,7 @@ public class DataGenerator
         return list;
     }
 
-    private static string ExtractInnerType(string type)
-    {
-        if (type.StartsWith("List<") || type.StartsWith("IEnumerable<"))
-        {
-            return type.Substring(type.IndexOf('<') + 1, type.LastIndexOf('>') - type.IndexOf('<') - 1);
-        }
-        return type;
-    }
+  
 
     private static object GenerateRandomCustomType(string typeName, List<ClassDefinition> trackedClasses)
     {
@@ -206,5 +268,13 @@ public class DataGenerator
             result[property.Name] = GenerateRandomValue(property, trackedClasses);
         }
         return result;
+    }
+
+
+    private static string GenerateRandomString()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        return new string(Enumerable.Repeat(chars, 10)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 }

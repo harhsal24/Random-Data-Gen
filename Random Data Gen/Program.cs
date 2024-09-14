@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json;
 
 public static class Program
 {
@@ -11,21 +12,22 @@ public static class Program
         Console.WriteLine("1. Manual field input");
         Console.WriteLine("2. Class input (paste)");
 
-        string choice = Console.ReadLine();
+        //string choice = Console.ReadLine();
 
-        switch (choice)
-        {
-            case "1":
-                InputHandler.HandleManualInput();
-                break;
-            case "2":
-                InputHandler.HandleClassInput();
-                break;
-            default:
-                Console.WriteLine("Invalid choice. Please run the program again.");
-                break;
-        }
+        //switch (choice)
+        //{
+        //    case "1":
+        //        InputHandler.HandleManualInput();
+        //        break;
+        //    case "2":
+        //        InputHandler.HandleClassInput();
+        //        break;
+        //    default:
+        //        Console.WriteLine("Invalid choice. Please run the program again.");
+        //        break;
+        //}
 
+        InitializeTrackedClasses();
         // Print tracked classes and properties
         PrintTrackedClasses();
 
@@ -34,8 +36,9 @@ public static class Program
         {
             DataGenerator.GenerateData(classDef, TrackedClasses, 3); // Generate 3 instances of each class
         }
+        Console.WriteLine("TrackedClasses:");
+        Console.WriteLine(JsonSerializer.Serialize(TrackedClasses));
     }
-
     private static void PrintTrackedClasses()
     {
         Console.WriteLine("\nTracked Classes:");
@@ -72,7 +75,57 @@ public static class Program
             }
         }
     }
+
+    public static void InitializeTrackedClasses()
+    {
+        TrackedClasses.Add(new ClassDefinition("Order")
+        {
+            Properties = new List<PropertyDefinition>
+            {
+                new PropertyDefinition("OrderId", "int"),
+                new PropertyDefinition("CustomerName", "string"),
+                new PropertyDefinition("OrderDate", "DateTime"),
+                new PropertyDefinition("TotalAmount", "decimal"),
+                new PropertyDefinition("IsShipped", "bool"),
+                new PropertyDefinition("Items", "List<OrderItem>"),
+                new PropertyDefinition("Status", "OrderStatus"),
+                new PropertyDefinition("ShippingAddress", "Address")
+            }
+        });
+
+        TrackedClasses.Add(new ClassDefinition("OrderItem")
+        {
+            Properties = new List<PropertyDefinition>
+            {
+                new PropertyDefinition("ProductId", "int"),
+                new PropertyDefinition("ProductName", "string"),
+                new PropertyDefinition("Quantity", "int"),
+                new PropertyDefinition("UnitPrice", "decimal")
+            }
+        });
+
+        TrackedClasses.Add(new ClassDefinition("OrderStatus")
+        {
+            Properties = new List<PropertyDefinition>
+            {
+                new PropertyDefinition("OrderStatus", "enum", new List<string> { "Pending", "Processing", "Shipped", "Delivered", "Cancelled" })
+            }
+        });
+
+        TrackedClasses.Add(new ClassDefinition("Address")
+        {
+            Properties = new List<PropertyDefinition>
+            {
+                new PropertyDefinition("Street", "string"),
+                new PropertyDefinition("City", "string"),
+                new PropertyDefinition("State", "string"),
+                new PropertyDefinition("ZipCode", "string"),
+                new PropertyDefinition("Country", "string")
+            }
+        });
+    }
 }
+
 
 
 
