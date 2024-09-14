@@ -18,24 +18,8 @@
             Console.Write("Name: ");
             string name = Console.ReadLine()?.Trim();
 
-            // Check for duplicate names
-            if (properties.Any(p => p.Name == name))
-            {
-                Console.WriteLine("Field name already exists. Please enter a unique field name.");
-                i--;  // Repeat iteration for duplicate field.
-                continue;
-            }
-
-            Console.Write("Type (string/int/double/decimal/datetime/dateonly/timeonly/datetimeoffset/timespan): ");
+            Console.Write("Type (string/int/double/decimal/datetime/dateonly/timeonly/datetimeoffset/timespan/list/ienumerable): ");
             string type = Console.ReadLine()?.Trim().ToLower();
-
-            // Validate input type
-            if (!IsSimpleType(type) && !IsSpecialDateOrTimeType(type))
-            {
-                Console.WriteLine("Invalid type entered. Please enter a valid type.");
-                i--;  // Repeat iteration for invalid type.
-                continue;
-            }
 
             properties.Add((name, type));
             Console.WriteLine($"Field added: {name} ({type})");
@@ -60,37 +44,31 @@
         {
             var (typeName, typeKind, properties) = ClassParser.ParseType(typeContent);
 
-            // Validate type
             if (!IsValidType(typeKind))
             {
                 Console.WriteLine($"Invalid type detected: {typeKind}. Please provide a valid class, enum, or record definition.");
                 return;
             }
 
-            // Validate properties
             if (properties == null || properties.Count == 0)
             {
                 Console.WriteLine("No valid properties found in the input. Please provide a valid class, enum, or record definition.");
                 return;
             }
 
-            // If valid, append to file
-            FileHandler.AppendToFile(typeContent);
-
-            Console.WriteLine($"\n{typeKind.ToUpperInvariant()} name: {typeName}");
-            Console.WriteLine("Properties found:");
-
-            // Print all properties, not just nested or complex ones
+            var classDef = new ClassDefinition(typeName);
             foreach (var prop in properties)
             {
                 Console.WriteLine($"- {prop.Name}: {prop.Type}");
+                classDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
             }
 
-            // Handle nested types
+            Program.TrackedClasses.Add(classDef);
+            FileHandler.AppendToFile(typeContent);
+
             HandleNestedTypes(properties);
 
             Console.WriteLine("\nReady for data generation based on these types.");
-            // Here you would pass the types and properties to your data generation method
         }
         catch (ArgumentException ex)
         {
@@ -104,7 +82,7 @@
         var nestedTypes = properties
             .Select(p => p.Type)
             .Distinct()
-            .Where(t => !IsSimpleType(t) && !IsSpecialDateOrTimeType(t)) // Exclude special types
+            .Where(t => !IsSimpleType(t) && !IsSpecialDateOrTimeType(t)) // Exclude simple and special types
             .ToList();
 
         foreach (var nestedType in nestedTypes)
@@ -117,21 +95,24 @@
                 string nestedTypeContent = ReadMultiLineInput();
                 var (nestedTypeName, nestedTypeKind, nestedProperties) = ClassParser.ParseType(nestedTypeContent);
 
-                if (!IsValidType(nestedTypeKind))
-                {
-                    Console.WriteLine("Invalid nested type definition. Please try again.");
-                    continue;
-                }
-
                 Console.WriteLine($"\nNested {nestedTypeKind.ToUpperInvariant()} name: {nestedTypeName}");
                 Console.WriteLine($"{(nestedTypeKind == "enum" ? "Values" : "Properties")} found:");
                 foreach (var prop in nestedProperties)
                 {
                     Console.WriteLine($"- {prop.Name}: {prop.Type}");
                 }
+
+                var nestedClassDef = new ClassDefinition(nestedTypeName);
+                foreach (var prop in nestedProperties)
+                {
+                    nestedClassDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
+                }
+
+                Program.TrackedClasses.Add(nestedClassDef);
             }
         }
     }
+
 
     private static bool IsSimpleType(string type)
     {
@@ -203,41 +184,10 @@
 
     private static bool IsValidType(string typeKind)
     {
-        // Check if the type is a valid class, enum, or record
         var validTypes = new HashSet<string> { "class", "enum", "record" };
         return validTypes.Contains(typeKind);
     }
 }
 
-public static class FileHandler
-{
-    public static void AppendToFile(string content, string fileName = "UserClass.txt")
-    {
-        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
 
-        try
-        {
-            // Clear the content of the file if it exists, or create a new file
-            File.WriteAllText(filePath, string.Empty);
-            Console.WriteLine("File created or cleared successfully.");
-
-            // Append the new content
-            File.AppendAllText(filePath, content + Environment.NewLine);
-            Console.WriteLine("Content appended successfully.");
-        }
-        catch (IOException ex)
-        {
-            Console.WriteLine($"An I/O error occurred while writing to the file: {ex.Message}");
-            Console.WriteLine("Please ensure the file is not in use and try again.");
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Console.WriteLine($"Access error: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Unexpected error: {ex.Message}");
-        }
-    }
-}
 

@@ -14,8 +14,6 @@ public class Order
     public Address ShippingAddress { get; set; }
 }
 
-
-
 public class OrderItem
 {
     public int ProductId { get; set; }
