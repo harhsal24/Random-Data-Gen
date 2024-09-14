@@ -10,6 +10,12 @@
         { "TimeSpan", "hh:mm:ss" }
     };
 
+    public static void SetCustomFormat(string type, string format)
+    {
+        // Implementation of setting custom format for special date/time types
+    }
+
+
     //public static  Dictionary<string, bool> TreatAsString = new Dictionary<string, bool>
     //{
     //    { "DateTime", false },

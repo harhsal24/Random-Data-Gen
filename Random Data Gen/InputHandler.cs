@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-public static class InputHandler
+﻿public static class InputHandler
 {
     public static void HandleManualInput()
     {
@@ -22,8 +18,24 @@ public static class InputHandler
             Console.Write("Name: ");
             string name = Console.ReadLine()?.Trim();
 
+            // Check for duplicate names
+            if (properties.Any(p => p.Name == name))
+            {
+                Console.WriteLine("Field name already exists. Please enter a unique field name.");
+                i--;  // Repeat iteration for duplicate field.
+                continue;
+            }
+
             Console.Write("Type (string/int/double/decimal/datetime/dateonly/timeonly/datetimeoffset/timespan): ");
             string type = Console.ReadLine()?.Trim().ToLower();
+
+            // Validate input type
+            if (!IsSimpleType(type) && !IsSpecialDateOrTimeType(type))
+            {
+                Console.WriteLine("Invalid type entered. Please enter a valid type.");
+                i--;  // Repeat iteration for invalid type.
+                continue;
+            }
 
             properties.Add((name, type));
             Console.WriteLine($"Field added: {name} ({type})");
@@ -44,8 +56,6 @@ public static class InputHandler
             return;
         }
 
-     
-
         try
         {
             var (typeName, typeKind, properties) = ClassParser.ParseType(typeContent);
@@ -65,32 +75,14 @@ public static class InputHandler
             }
 
             // If valid, append to file
-            AppendToFile(typeContent);
+            FileHandler.AppendToFile(typeContent);
 
-            bool isPrinted = false;
-            bool isSpecialDateTimeHandled = false;
+            Console.WriteLine($"\n{typeKind.ToUpperInvariant()} name: {typeName}");
+            Console.WriteLine("Properties found:");
 
+            // Print all properties, not just nested or complex ones
             foreach (var prop in properties)
             {
-                if (IsSimpleType(prop.Type))
-                {
-                    continue;
-                }
-
-                if (IsSpecialDateOrTimeType(prop.Type) && !isSpecialDateTimeHandled)
-                {
-                    HandleSpecialDateTimeType(prop.Type);
-                    isSpecialDateTimeHandled = true;
-                    continue;
-                }
-
-                if (!isPrinted)
-                {
-                    Console.WriteLine($"\n{typeKind.ToUpperInvariant()} name: {typeName}");
-                    Console.WriteLine($"{(typeKind == "enum" ? "Values" : "Properties")} found:");
-                    isPrinted = true;
-                }
-
                 Console.WriteLine($"- {prop.Name}: {prop.Type}");
             }
 
@@ -99,7 +91,6 @@ public static class InputHandler
 
             Console.WriteLine("\nReady for data generation based on these types.");
             // Here you would pass the types and properties to your data generation method
-
         }
         catch (ArgumentException ex)
         {
@@ -126,6 +117,12 @@ public static class InputHandler
                 string nestedTypeContent = ReadMultiLineInput();
                 var (nestedTypeName, nestedTypeKind, nestedProperties) = ClassParser.ParseType(nestedTypeContent);
 
+                if (!IsValidType(nestedTypeKind))
+                {
+                    Console.WriteLine("Invalid nested type definition. Please try again.");
+                    continue;
+                }
+
                 Console.WriteLine($"\nNested {nestedTypeKind.ToUpperInvariant()} name: {nestedTypeName}");
                 Console.WriteLine($"{(nestedTypeKind == "enum" ? "Values" : "Properties")} found:");
                 foreach (var prop in nestedProperties)
@@ -150,10 +147,24 @@ public static class InputHandler
         if (choice == "yes" || choice == "y")
         {
             Configuration.TreatAsString = true;
+
+            Console.WriteLine("Enter the custom format (optional, leave empty for default):");
+            string format = Console.ReadLine()?.Trim();
+
+            if (!string.IsNullOrEmpty(format))
+            {
+                Configuration.SetCustomFormat(type, format);
+                Console.WriteLine($"Custom format set for {type}: {format}");
+            }
+            else
+            {
+                Console.WriteLine($"Default format will be used for {type}");
+            }
         }
-        else if (choice == "no" || choice == "n")
+        else
         {
             Configuration.TreatAsString = false;
+            Console.WriteLine($"{type} will not be treated as a string.");
         }
 
         Console.WriteLine($"Treat as string: {Configuration.TreatAsString}");
@@ -196,11 +207,13 @@ public static class InputHandler
         var validTypes = new HashSet<string> { "class", "enum", "record" };
         return validTypes.Contains(typeKind);
     }
+}
 
-    private static void AppendToFile(string content)
+public static class FileHandler
+{
+    public static void AppendToFile(string content, string fileName = "UserClass.txt")
     {
-        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserClass.txt");
-        Console.WriteLine($"File path: {filePath}");
+        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
 
         try
         {
@@ -214,7 +227,8 @@ public static class InputHandler
         }
         catch (IOException ex)
         {
-            Console.WriteLine($"Error writing to file: {ex.Message}");
+            Console.WriteLine($"An I/O error occurred while writing to the file: {ex.Message}");
+            Console.WriteLine("Please ensure the file is not in use and try again.");
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -225,8 +239,5 @@ public static class InputHandler
             Console.WriteLine($"Unexpected error: {ex.Message}");
         }
     }
-
-
-
-
 }
+
