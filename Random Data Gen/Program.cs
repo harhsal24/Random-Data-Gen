@@ -47,25 +47,4 @@ public static class Program
 }
 
 
-public class ClassDefinition
-{
-    public string Name { get; }
-    public List<PropertyDefinition> Properties { get; } = new List<PropertyDefinition>();
 
-    public ClassDefinition(string name)
-    {
-        Name = name;
-    }
-}
-
-public class PropertyDefinition
-{
-    public string Name { get; }
-    public string Type { get; }
-
-    public PropertyDefinition(string name, string type)
-    {
-        Name = name;
-        Type = type;
-    }
-}
