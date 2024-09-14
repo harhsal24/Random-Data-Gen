@@ -28,6 +28,12 @@ public static class Program
 
         // Print tracked classes and properties
         PrintTrackedClasses();
+
+        // Assuming you have a list of ClassDefinitions called trackedClasses
+        foreach (var classDef in TrackedClasses)
+        {
+            DataGenerator.GenerateData(classDef, TrackedClasses, 3); // Generate 3 instances of each class
+        }
     }
 
     private static void PrintTrackedClasses()
