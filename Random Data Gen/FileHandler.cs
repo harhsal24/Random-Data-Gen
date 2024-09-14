@@ -1,6 +1,5 @@
 ﻿
 
-namespace Random_Data_Gen;
 
 public static class FileHandler
 {

@@ -1,4 +1,6 @@
-﻿public static class InputHandler
+﻿
+
+public static class InputHandler
 {
     public static void HandleManualInput()
     {
