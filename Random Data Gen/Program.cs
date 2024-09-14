@@ -33,14 +33,36 @@ public static class Program
     private static void PrintTrackedClasses()
     {
         Console.WriteLine("\nTracked Classes:");
-
-        foreach (var classDef in Program.TrackedClasses)
+        foreach (var classDef in TrackedClasses)
         {
             Console.WriteLine($"\nClass: {classDef.Name}");
 
-            foreach (var prop in classDef.Properties)
+            // Check if it's an enum
+            if (classDef.Properties.Any() && classDef.Properties[0].Type.ToLower() == "enum")
             {
-                Console.WriteLine($"- {prop.Name}: {prop.Type}");
+                Console.WriteLine("Enum Values:");
+                foreach (var value in classDef.Properties[0].Values)
+                {
+                    Console.WriteLine($"  - {value}");
+                }
+            }
+            else
+            {
+                foreach (var prop in classDef.Properties)
+                {
+                    if (prop.Type.ToLower() == "enum" && prop.Values != null && prop.Values.Any())
+                    {
+                        Console.WriteLine($"- {prop.Name} (Enum):");
+                        foreach (var value in prop.Values)
+                        {
+                            Console.WriteLine($"  - {value}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"- {prop.Name}: {prop.Type}");
+                    }
+                }
             }
         }
     }

@@ -1,13 +1,11 @@
-﻿
-
-public static class InputHandler
+﻿public static class InputHandler
 {
     public static void HandleManualInput()
     {
         Console.WriteLine("Enter the number of fields you want to generate:");
-        if (!int.TryParse(Console.ReadLine(), out int fieldCount))
+        if (!int.TryParse(Console.ReadLine(), out int fieldCount) || fieldCount <= 0)
         {
-            Console.WriteLine("Invalid number. Please run the program again.");
+            Console.WriteLine("Invalid number. Please enter a positive integer.");
             return;
         }
 
@@ -17,11 +15,8 @@ public static class InputHandler
         {
             Console.WriteLine($"Field {i + 1}:");
 
-            Console.Write("Name: ");
-            string name = Console.ReadLine()?.Trim();
-
-            Console.Write("Type (string/int/double/decimal/datetime/dateonly/timeonly/datetimeoffset/timespan/list/ienumerable): ");
-            string type = Console.ReadLine()?.Trim().ToLower();
+            string name = GetValidFieldName();
+            string type = GetValidFieldType();
 
             properties.Add((name, type));
             Console.WriteLine($"Field added: {name} ({type})");
@@ -35,41 +30,47 @@ public static class InputHandler
     {
         Console.WriteLine("Paste your class or enum definition below (press Enter twice to finish):");
         string typeContent = ReadMultiLineInput().Trim();
-
         if (string.IsNullOrWhiteSpace(typeContent))
         {
             Console.WriteLine("No input detected. Please provide a valid class or enum definition.");
             return;
         }
-
         try
         {
             var (typeName, typeKind, properties) = ClassParser.ParseType(typeContent);
-
             if (!IsValidType(typeKind))
             {
                 Console.WriteLine($"Invalid type detected: {typeKind}. Please provide a valid class, enum, or record definition.");
                 return;
             }
-
             if (properties == null || properties.Count == 0)
             {
                 Console.WriteLine("No valid properties found in the input. Please provide a valid class, enum, or record definition.");
                 return;
             }
-
             var classDef = new ClassDefinition(typeName);
-            foreach (var prop in properties)
+            if (typeKind.ToLower() == "enum")
             {
-                Console.WriteLine($"- {prop.Name}: {prop.Type}");
-                classDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
+                // For enums, add a single property with all enum values
+                var enumValues = properties.Select(p => p.Name).ToList();
+                classDef.Properties.Add(new PropertyDefinition(typeName, typeKind, enumValues));
+                Console.WriteLine($"Enum {typeName} with values:");
+                foreach (var value in enumValues)
+                {
+                    Console.WriteLine($"- {value}");
+                }
             }
-
+            else
+            {
+                foreach (var prop in properties)
+                {
+                    Console.WriteLine($"- {prop.Name}: {prop.Type}");
+                    classDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
+                }
+            }
             Program.TrackedClasses.Add(classDef);
             FileHandler.AppendToFile(typeContent);
-
             HandleNestedTypes(properties);
-
             Console.WriteLine("\nReady for data generation based on these types.");
         }
         catch (ArgumentException ex)
@@ -78,47 +79,51 @@ public static class InputHandler
         }
     }
 
-
     private static void HandleNestedTypes(List<(string Name, string Type)> properties)
     {
         var nestedTypes = properties
             .Select(p => p.Type)
             .Distinct()
-            .Where(t => !IsSimpleType(t) && !IsSpecialDateOrTimeType(t)) // Exclude simple and special types
+            .Where(t => !IsSimpleType(t) && !IsSpecialDateOrTimeType(t))
             .ToList();
-
         foreach (var nestedType in nestedTypes)
         {
             var typeToProcess = ExtractInnerType(nestedType);
-
             if (!IsSimpleType(typeToProcess) && !IsSpecialDateOrTimeType(typeToProcess))
             {
                 Console.WriteLine($"\nPlease provide the definition for the nested type '{typeToProcess}':");
                 string nestedTypeContent = ReadMultiLineInput();
                 var (nestedTypeName, nestedTypeKind, nestedProperties) = ClassParser.ParseType(nestedTypeContent);
-
                 Console.WriteLine($"\nNested {nestedTypeKind.ToUpperInvariant()} name: {nestedTypeName}");
-                Console.WriteLine($"{(nestedTypeKind == "enum" ? "Values" : "Properties")} found:");
-                foreach (var prop in nestedProperties)
-                {
-                    Console.WriteLine($"- {prop.Name}: {prop.Type}");
-                }
-
                 var nestedClassDef = new ClassDefinition(nestedTypeName);
-                foreach (var prop in nestedProperties)
+                if (nestedTypeKind.ToLower() == "enum")
                 {
-                    nestedClassDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
+                    // For enums, add a single property with all enum values
+                    var enumValues = nestedProperties.Select(p => p.Name).ToList();
+                    nestedClassDef.Properties.Add(new PropertyDefinition(nestedTypeName, nestedTypeKind, enumValues));
+                    Console.WriteLine("Enum values:");
+                    foreach (var value in enumValues)
+                    {
+                        Console.WriteLine($"- {value}");
+                    }
                 }
-
+                else
+                {
+                    Console.WriteLine("Properties found:");
+                    foreach (var prop in nestedProperties)
+                    {
+                        Console.WriteLine($"- {prop.Name}: {prop.Type}");
+                        nestedClassDef.Properties.Add(new PropertyDefinition(prop.Name, prop.Type));
+                    }
+                }
                 Program.TrackedClasses.Add(nestedClassDef);
             }
         }
     }
 
-
     private static bool IsSimpleType(string type)
     {
-        var simpleTypes = new HashSet<string> { "int", "string", "bool", "double", "decimal" };
+        var simpleTypes = new HashSet<string> { "int", "string", "bool", "double", "decimal", "float", "long", "short", "byte", "char" };
         return simpleTypes.Contains(type.ToLower());
     }
 
@@ -167,7 +172,7 @@ public static class InputHandler
         if (type.StartsWith("list<", StringComparison.OrdinalIgnoreCase) ||
             type.StartsWith("ienumerable<", StringComparison.OrdinalIgnoreCase))
         {
-            return type.Substring(type.IndexOf('<') + 1, type.IndexOf('>') - type.IndexOf('<') - 1);
+            return type.Substring(type.IndexOf('<') + 1, type.LastIndexOf('>') - type.IndexOf('<') - 1);
         }
         return type;
     }
@@ -187,9 +192,29 @@ public static class InputHandler
     private static bool IsValidType(string typeKind)
     {
         var validTypes = new HashSet<string> { "class", "enum", "record" };
-        return validTypes.Contains(typeKind);
+        return validTypes.Contains(typeKind.ToLower());
+    }
+
+    private static string GetValidFieldName()
+    {
+        string name;
+        do
+        {
+            Console.Write("Name: ");
+            name = Console.ReadLine()?.Trim();
+        } while (string.IsNullOrWhiteSpace(name));
+        return name;
+    }
+
+    private static string GetValidFieldType()
+    {
+        string type;
+        var validTypes = new HashSet<string> { "string", "int", "double", "decimal", "datetime", "dateonly", "timeonly", "datetimeoffset", "timespan", "list", "ienumerable" };
+        do
+        {
+            Console.Write("Type (string/int/double/decimal/datetime/dateonly/timeonly/datetimeoffset/timespan/list/ienumerable): ");
+            type = Console.ReadLine()?.Trim().ToLower();
+        } while (!validTypes.Contains(type));
+        return type;
     }
 }
-
-
-
